@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 const (
@@ -24,7 +25,7 @@ const (
 type User struct {
 	ID           uuid.UUID `json:"id"`
 	Role         string    `json:"role"`
-	Phone        string    `json:"phone"`
+	Phone        *string   `json:"phone,omitempty"`
 	Email        *string   `json:"email,omitempty"`
 	PasswordHash string    `json:"-"`
 	CreatedAt    time.Time `json:"created_at"`
@@ -33,6 +34,7 @@ type User struct {
 type LandlordProfile struct {
 	ID                     uuid.UUID  `json:"id"`
 	UserID                 uuid.UUID  `json:"user_id"`
+	FullName               string     `json:"full_name"`
 	NationalIDNumber       string     `json:"national_id_number"`
 	IDDocumentURL          *string    `json:"id_document_url,omitempty"`
 	IsCaretaker            bool       `json:"is_caretaker"`
@@ -52,24 +54,32 @@ type TenantProfile struct {
 }
 
 type Property struct {
-	ID          uuid.UUID `json:"id"`
-	LandlordID  uuid.UUID `json:"landlord_id"`
-	Name        string    `json:"name"`
-	Location    string    `json:"location"`
-	Address     *string   `json:"address,omitempty"`
-	Description *string   `json:"description,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID            uuid.UUID      `json:"id"`
+	LandlordID    uuid.UUID      `json:"landlord_id"`
+	Name          string         `json:"name"`
+	Location      string         `json:"location"`
+	County        *string        `json:"county,omitempty"`
+	Address       *string        `json:"address,omitempty"`
+	MapsURL       *string        `json:"maps_url,omitempty"`
+	Description   *string        `json:"description,omitempty"`
+	ImageURL      *string        `json:"image_url,omitempty"`
+	CreatedAt     time.Time      `json:"created_at"`
+	Categories    []UnitCategory `json:"categories,omitempty"`
+	MinRent       *float64       `json:"min_rent,omitempty"`
+	TotalUnits    *int           `json:"total_units,omitempty"`
+	MapCoords     *string        `json:"map_coords,omitempty"`
 }
 
-type Unit struct {
-	ID         uuid.UUID `json:"id"`
-	PropertyID uuid.UUID `json:"property_id"`
-	UnitLabel  string    `json:"unit_label"`
-	Bedrooms   int       `json:"bedrooms"`
-	UnitType   string    `json:"unit_type"`
-	RentAmount float64   `json:"rent_amount"`
-	Status     string    `json:"status"`
-	CreatedAt  time.Time `json:"created_at"`
+type UnitCategory struct {
+	ID                uuid.UUID      `json:"id"`
+	PropertyID        uuid.UUID      `json:"property_id"`
+	Name              string         `json:"name"`
+	Description       *string        `json:"description,omitempty"`
+	RentAmount        float64        `json:"rent_amount"`
+	QuantityAvailable int            `json:"quantity_available"`
+	Photos            pq.StringArray `json:"photos"`
+	VideoURL          *string        `json:"video_url,omitempty"`
+	CreatedAt         time.Time      `json:"created_at"`
 }
 
 type PropertyReport struct {
@@ -94,7 +104,7 @@ type AdminAuditLog struct {
 // DTOs & Responses
 
 type RegisterRequest struct {
-	Phone                  string     `json:"phone"`
+	Phone                  *string    `json:"phone,omitempty"`
 	Email                  *string    `json:"email"`
 	Password               string     `json:"password"`
 	Role                   string     `json:"role"`
@@ -104,8 +114,15 @@ type RegisterRequest struct {
 	AuthorizedByLandlordID *uuid.UUID `json:"authorized_by_landlord_id,omitempty"`
 }
 
+type SubmitVerificationRequest struct {
+	FullName         string  `json:"full_name"`
+	Phone            *string `json:"phone,omitempty"`
+	NationalIDNumber string  `json:"national_id_number"`
+	IDDocumentURL    *string `json:"id_document_url,omitempty"`
+}
+
 type LoginRequest struct {
-	Identifier string `json:"identifier"` // Phone or Email
+	Identifier string `json:"identifier"`
 	Password   string `json:"password"`
 }
 
@@ -117,23 +134,39 @@ type AuthResponse struct {
 type CreatePropertyRequest struct {
 	Name        string  `json:"name"`
 	Location    string  `json:"location"`
-	Address     *string `json:"address"`
-	Description *string `json:"description"`
+	County      *string `json:"county,omitempty"`
+	Address     *string `json:"address,omitempty"`
+	MapsURL     *string `json:"maps_url,omitempty"`
+	Description *string `json:"description,omitempty"`
+	ImageURL    *string `json:"image_url,omitempty"`
 }
 
-type CreateUnitRequest struct {
-	UnitLabel  string  `json:"unit_label"`
-	Bedrooms   int     `json:"bedrooms"`
-	UnitType   string  `json:"unit_type"`
-	RentAmount float64 `json:"rent_amount"`
+type CreateCategoryRequest struct {
+	Name              string   `json:"name"`
+	Description       *string  `json:"description,omitempty"`
+	RentAmount        float64  `json:"rent_amount"`
+	QuantityAvailable int      `json:"quantity_available"`
+	Photos            []string `json:"photos,omitempty"`
+	VideoURL          *string  `json:"video_url,omitempty"`
 }
 
-type UpdateUnitRequest struct {
-	UnitLabel  *string  `json:"unit_label"`
-	Bedrooms   *int     `json:"bedrooms"`
-	UnitType   *string  `json:"unit_type"`
-	RentAmount *float64 `json:"rent_amount"`
-	Status     *string  `json:"status"`
+type UpdateCategoryRequest struct {
+	Name              *string   `json:"name,omitempty"`
+	Description       *string   `json:"description,omitempty"`
+	RentAmount        *float64  `json:"rent_amount,omitempty"`
+	QuantityAvailable *int      `json:"quantity_available,omitempty"`
+	Photos            []string  `json:"photos,omitempty"`
+	VideoURL          *string   `json:"video_url,omitempty"`
+}
+
+type UpdatePropertyRequest struct {
+	Name        *string `json:"name,omitempty"`
+	Location    *string `json:"location,omitempty"`
+	County      *string `json:"county,omitempty"`
+	Address     *string `json:"address,omitempty"`
+	MapsURL     *string `json:"maps_url,omitempty"`
+	Description *string `json:"description,omitempty"`
+	ImageURL    *string `json:"image_url,omitempty"`
 }
 
 type RevokeRequest struct {
@@ -142,8 +175,7 @@ type RevokeRequest struct {
 
 type PropertyFilter struct {
 	Location string
-	Bedrooms *int
-	UnitType string
+	County   string
 }
 
 type ContactInfoResponse struct {
@@ -153,4 +185,27 @@ type ContactInfoResponse struct {
 	LandlordPhone   string          `json:"landlord_phone"`
 	LandlordEmail   *string         `json:"landlord_email,omitempty"`
 	LandlordProfile LandlordProfile `json:"landlord_profile"`
+}
+
+// Admin response types
+
+type CustomerView struct {
+	ID        uuid.UUID `json:"id"`
+	Email     *string   `json:"email,omitempty"`
+	Phone     *string   `json:"phone,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type AgentView struct {
+	ID                 uuid.UUID  `json:"id"`
+	UserID             uuid.UUID  `json:"user_id"`
+	Email              *string    `json:"email,omitempty"`
+	Phone              *string    `json:"phone,omitempty"`
+	FullName           string     `json:"full_name"`
+	NationalIDNumber   string     `json:"national_id_number"`
+	VerificationStatus string     `json:"verification_status"`
+	VerifiedAt         *time.Time `json:"verified_at,omitempty"`
+	RevokedAt          *time.Time `json:"revoked_at,omitempty"`
+	RevokeReason       *string    `json:"revoke_reason,omitempty"`
+	CreatedAt          time.Time  `json:"created_at"`
 }

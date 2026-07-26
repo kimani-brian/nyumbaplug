@@ -11,10 +11,15 @@ import (
 
 type LandlordService interface {
 	GetProfile(ctx context.Context, userID uuid.UUID) (*domain.LandlordProfile, error)
+	SubmitVerificationRequest(ctx context.Context, userID uuid.UUID, req domain.SubmitVerificationRequest) (*domain.LandlordProfile, error)
 	CreateProperty(ctx context.Context, userID uuid.UUID, req domain.CreatePropertyRequest) (*domain.Property, error)
 	GetProperties(ctx context.Context, userID uuid.UUID) ([]domain.Property, error)
-	CreateUnit(ctx context.Context, userID, propertyID uuid.UUID, req domain.CreateUnitRequest) (*domain.Unit, error)
-	UpdateUnit(ctx context.Context, userID, unitID uuid.UUID, req domain.UpdateUnitRequest) (*domain.Unit, error)
+	DeleteProperty(ctx context.Context, userID, propertyID uuid.UUID) error
+	UpdateProperty(ctx context.Context, userID, propertyID uuid.UUID, req domain.UpdatePropertyRequest) (*domain.Property, error)
+	AddCategory(ctx context.Context, userID, propertyID uuid.UUID, req domain.CreateCategoryRequest) (*domain.UnitCategory, error)
+	UpdateCategory(ctx context.Context, userID, categoryID uuid.UUID, req domain.UpdateCategoryRequest) (*domain.UnitCategory, error)
+	DeleteCategory(ctx context.Context, userID, categoryID uuid.UUID) error
+	AdjustCategoryQuantity(ctx context.Context, userID, categoryID uuid.UUID, delta int) error
 }
 
 type landlordService struct {
@@ -29,6 +34,32 @@ func (s *landlordService) GetProfile(ctx context.Context, userID uuid.UUID) (*do
 	return s.repo.GetLandlordProfileByUserID(ctx, userID)
 }
 
+func (s *landlordService) SubmitVerificationRequest(ctx context.Context, userID uuid.UUID, req domain.SubmitVerificationRequest) (*domain.LandlordProfile, error) {
+	if req.FullName == "" || req.NationalIDNumber == "" {
+		return nil, domain.ErrInvalidInput
+	}
+
+	if req.Phone != nil {
+		if err := s.repo.UpdateUserPhone(ctx, userID, req.Phone); err != nil {
+			return nil, err
+		}
+	}
+
+	profile := &domain.LandlordProfile{
+		ID:                 uuid.New(),
+		UserID:             userID,
+		FullName:           req.FullName,
+		NationalIDNumber:   req.NationalIDNumber,
+		IDDocumentURL:      req.IDDocumentURL,
+		VerificationStatus: domain.StatusPending,
+		CreatedAt:          time.Now(),
+	}
+	if err := s.repo.CreateLandlordProfile(ctx, profile); err != nil {
+		return nil, err
+	}
+	return profile, nil
+}
+
 // Business Rule 1: Verified landlord requirement enforced
 func (s *landlordService) CreateProperty(ctx context.Context, userID uuid.UUID, req domain.CreatePropertyRequest) (*domain.Property, error) {
 	if req.Name == "" || req.Location == "" {
@@ -40,7 +71,6 @@ func (s *landlordService) CreateProperty(ctx context.Context, userID uuid.UUID, 
 		return nil, err
 	}
 
-	// Business Rule 1: A landlord cannot create properties until verification_status = 'verified'
 	if profile.VerificationStatus != domain.StatusVerified {
 		return nil, domain.ErrLandlordNotVerified
 	}
@@ -50,8 +80,11 @@ func (s *landlordService) CreateProperty(ctx context.Context, userID uuid.UUID, 
 		LandlordID:  profile.ID,
 		Name:        req.Name,
 		Location:    req.Location,
+		County:      req.County,
 		Address:     req.Address,
+		MapsURL:     req.MapsURL,
 		Description: req.Description,
+		ImageURL:    req.ImageURL,
 		CreatedAt:   time.Now(),
 	}
 
@@ -67,22 +100,45 @@ func (s *landlordService) GetProperties(ctx context.Context, userID uuid.UUID) (
 	if err != nil {
 		return nil, err
 	}
-	return s.repo.GetPropertiesByLandlordID(ctx, profile.ID)
-}
 
-// Business Rule 1: Verified landlord requirement enforced
-func (s *landlordService) CreateUnit(ctx context.Context, userID, propertyID uuid.UUID, req domain.CreateUnitRequest) (*domain.Unit, error) {
-	if req.UnitLabel == "" || req.Bedrooms < 0 || req.RentAmount <= 0 {
-		return nil, domain.ErrInvalidInput
-	}
-
-	profile, err := s.repo.GetLandlordProfileByUserID(ctx, userID)
+	properties, err := s.repo.GetPropertiesByLandlordID(ctx, profile.ID)
 	if err != nil {
 		return nil, err
 	}
 
-	if profile.VerificationStatus != domain.StatusVerified {
-		return nil, domain.ErrLandlordNotVerified
+	for i := range properties {
+		cats, err := s.repo.GetCategoriesByPropertyID(ctx, properties[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		properties[i].Categories = cats
+	}
+
+	return properties, nil
+}
+
+func (s *landlordService) DeleteProperty(ctx context.Context, userID, propertyID uuid.UUID) error {
+	profile, err := s.repo.GetLandlordProfileByUserID(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	property, err := s.repo.GetPropertyByID(ctx, propertyID)
+	if err != nil {
+		return err
+	}
+
+	if property.LandlordID != profile.ID {
+		return domain.ErrForbidden
+	}
+
+	return s.repo.DeleteProperty(ctx, propertyID)
+}
+
+func (s *landlordService) UpdateProperty(ctx context.Context, userID, propertyID uuid.UUID, req domain.UpdatePropertyRequest) (*domain.Property, error) {
+	profile, err := s.repo.GetLandlordProfileByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
 	}
 
 	property, err := s.repo.GetPropertyByID(ctx, propertyID)
@@ -94,40 +150,48 @@ func (s *landlordService) CreateUnit(ctx context.Context, userID, propertyID uui
 		return nil, domain.ErrForbidden
 	}
 
-	u := &domain.Unit{
-		ID:         uuid.New(),
-		PropertyID: propertyID,
-		UnitLabel:  req.UnitLabel,
-		Bedrooms:   req.Bedrooms,
-		UnitType:   req.UnitType,
-		RentAmount: req.RentAmount,
-		Status:     domain.UnitVacant,
-		CreatedAt:  time.Now(),
+	if req.Name != nil {
+		property.Name = *req.Name
+	}
+	if req.Location != nil {
+		property.Location = *req.Location
+	}
+	if req.County != nil {
+		property.County = req.County
+	}
+	if req.Address != nil {
+		property.Address = req.Address
+	}
+	if req.MapsURL != nil {
+		property.MapsURL = req.MapsURL
+	}
+	if req.Description != nil {
+		property.Description = req.Description
+	}
+	if req.ImageURL != nil {
+		property.ImageURL = req.ImageURL
 	}
 
-	if err := s.repo.CreateUnit(ctx, u); err != nil {
+	if err := s.repo.UpdateProperty(ctx, property); err != nil {
 		return nil, err
 	}
 
-	return u, nil
+	return property, nil
 }
 
-func (s *landlordService) UpdateUnit(ctx context.Context, userID, unitID uuid.UUID, req domain.UpdateUnitRequest) (*domain.Unit, error) {
+// Category management
+
+func (s *landlordService) AddCategory(ctx context.Context, userID, propertyID uuid.UUID, req domain.CreateCategoryRequest) (*domain.UnitCategory, error) {
+	if req.Name == "" || req.RentAmount <= 0 {
+		return nil, domain.ErrInvalidInput
+	}
+
 	profile, err := s.repo.GetLandlordProfileByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	if profile.VerificationStatus != domain.StatusVerified {
-		return nil, domain.ErrLandlordNotVerified
-	}
-
-	unit, err := s.repo.GetUnitByID(ctx, unitID)
-	if err != nil {
-		return nil, err
-	}
-
-	property, err := s.repo.GetPropertyByID(ctx, unit.PropertyID)
+	property, err := s.repo.GetPropertyByID(ctx, propertyID)
 	if err != nil {
 		return nil, err
 	}
@@ -136,25 +200,117 @@ func (s *landlordService) UpdateUnit(ctx context.Context, userID, unitID uuid.UU
 		return nil, domain.ErrForbidden
 	}
 
-	if req.UnitLabel != nil {
-		unit.UnitLabel = *req.UnitLabel
-	}
-	if req.Bedrooms != nil {
-		unit.Bedrooms = *req.Bedrooms
-	}
-	if req.UnitType != nil {
-		unit.UnitType = *req.UnitType
-	}
-	if req.RentAmount != nil {
-		unit.RentAmount = *req.RentAmount
-	}
-	if req.Status != nil {
-		unit.Status = *req.Status
+	if profile.VerificationStatus != domain.StatusVerified {
+		return nil, domain.ErrLandlordNotVerified
 	}
 
-	if err := s.repo.UpdateUnit(ctx, unit); err != nil {
+	cat := &domain.UnitCategory{
+		ID:                uuid.New(),
+		PropertyID:        propertyID,
+		Name:              req.Name,
+		Description:       req.Description,
+		RentAmount:        req.RentAmount,
+		QuantityAvailable: req.QuantityAvailable,
+		Photos:            req.Photos,
+		VideoURL:          req.VideoURL,
+		CreatedAt:         time.Now(),
+	}
+
+	if err := s.repo.CreateCategory(ctx, cat); err != nil {
 		return nil, err
 	}
 
-	return unit, nil
+	return cat, nil
+}
+
+func (s *landlordService) UpdateCategory(ctx context.Context, userID, categoryID uuid.UUID, req domain.UpdateCategoryRequest) (*domain.UnitCategory, error) {
+	profile, err := s.repo.GetLandlordProfileByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	cat, err := s.repo.GetCategoryByID(ctx, categoryID)
+	if err != nil {
+		return nil, err
+	}
+
+	property, err := s.repo.GetPropertyByID(ctx, cat.PropertyID)
+	if err != nil {
+		return nil, err
+	}
+
+	if property.LandlordID != profile.ID {
+		return nil, domain.ErrForbidden
+	}
+
+	if req.Name != nil {
+		cat.Name = *req.Name
+	}
+	if req.Description != nil {
+		cat.Description = req.Description
+	}
+	if req.RentAmount != nil {
+		cat.RentAmount = *req.RentAmount
+	}
+	if req.QuantityAvailable != nil {
+		cat.QuantityAvailable = *req.QuantityAvailable
+	}
+	if req.Photos != nil {
+		cat.Photos = req.Photos
+	}
+	if req.VideoURL != nil {
+		cat.VideoURL = req.VideoURL
+	}
+
+	if err := s.repo.UpdateCategory(ctx, cat); err != nil {
+		return nil, err
+	}
+
+	return cat, nil
+}
+
+func (s *landlordService) DeleteCategory(ctx context.Context, userID, categoryID uuid.UUID) error {
+	profile, err := s.repo.GetLandlordProfileByUserID(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	cat, err := s.repo.GetCategoryByID(ctx, categoryID)
+	if err != nil {
+		return err
+	}
+
+	property, err := s.repo.GetPropertyByID(ctx, cat.PropertyID)
+	if err != nil {
+		return err
+	}
+
+	if property.LandlordID != profile.ID {
+		return domain.ErrForbidden
+	}
+
+	return s.repo.DeleteCategory(ctx, categoryID)
+}
+
+func (s *landlordService) AdjustCategoryQuantity(ctx context.Context, userID, categoryID uuid.UUID, delta int) error {
+	profile, err := s.repo.GetLandlordProfileByUserID(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	cat, err := s.repo.GetCategoryByID(ctx, categoryID)
+	if err != nil {
+		return err
+	}
+
+	property, err := s.repo.GetPropertyByID(ctx, cat.PropertyID)
+	if err != nil {
+		return err
+	}
+
+	if property.LandlordID != profile.ID {
+		return domain.ErrForbidden
+	}
+
+	return s.repo.UpdateCategoryQuantity(ctx, categoryID, delta)
 }

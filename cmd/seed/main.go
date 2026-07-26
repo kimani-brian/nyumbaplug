@@ -22,14 +22,15 @@ func main() {
 	}
 	defer db.Close()
 
-	hash, _ := bcrypt.GenerateFromPassword([]byte("AdminPass123!"), bcrypt.DefaultCost)
+	hash, _ := bcrypt.GenerateFromPassword([]byte(cfg.AdminPassword), bcrypt.DefaultCost)
 	adminID := uuid.New()
 
-	query := `INSERT INTO users (id, role, phone, email, password_hash) VALUES ($1, 'admin', '+254700000000', 'admin@kenyahouses.co.ke', $2) ON CONFLICT (phone) DO NOTHING`
-	_, err = db.Exec(query, adminID, string(hash))
+	var phone *string
+	query := `INSERT INTO users (id, role, phone, email, password_hash) VALUES ($1, 'admin', $2, $3, $4) ON CONFLICT (email) DO NOTHING`
+	_, err = db.Exec(query, adminID, phone, cfg.AdminEmail, string(hash))
 	if err != nil {
 		log.Fatalf("Admin seeding failed: %v", err)
 	}
 
-	log.Println("Admin account created: Phone (+254700000000), Password (AdminPass123!)")
+	log.Printf("Admin account ready: Email (%s), Password (%s)", cfg.AdminEmail, cfg.AdminPassword)
 }

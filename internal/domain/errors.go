@@ -17,4 +17,5 @@ var (
 	ErrAuthorizerNotVerified  = errors.New("authorizing landlord is not verified")
 	ErrContactNotAvailable    = errors.New("contact details not available for non-vacant units or unverified landlords")
 	ErrInvalidInput           = errors.New("invalid request payload")
+	ErrCategoryNotFound       = errors.New("category not found")
 )

@@ -7,10 +7,12 @@ import (
 )
 
 type Config struct {
-	Port        string
-	DatabaseURL string
-	JWTSecret   string
-	Environment string
+	Port          string
+	DatabaseURL   string
+	JWTSecret     string
+	Environment   string
+	AdminEmail    string
+	AdminPassword string
 }
 
 func Load() (*Config, error) {
@@ -36,10 +38,22 @@ func Load() (*Config, error) {
 		env = "development"
 	}
 
+	adminEmail := os.Getenv("ADMIN_EMAIL")
+	if adminEmail == "" {
+		adminEmail = "admin@nyumbaplug.com"
+	}
+
+	adminPassword := os.Getenv("ADMIN_PASSWORD")
+	if adminPassword == "" {
+		adminPassword = "AdminPass123!"
+	}
+
 	return &Config{
-		Port:        port,
-		DatabaseURL: dbURL,
-		JWTSecret:   jwtSecret,
-		Environment: env,
+		Port:          port,
+		DatabaseURL:   dbURL,
+		JWTSecret:     jwtSecret,
+		Environment:   env,
+		AdminEmail:    adminEmail,
+		AdminPassword: adminPassword,
 	}, nil
 }

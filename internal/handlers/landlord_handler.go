@@ -23,11 +23,32 @@ func (h *LandlordHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
 	profile, err := h.landlordService.GetProfile(r.Context(), userID)
 	if err != nil {
-		http.Error(w, `{"error":"profile not found"}`, http.StatusNotFound)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"profile": nil})
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(profile)
+}
+
+func (h *LandlordHandler) SubmitVerification(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
+	var req domain.SubmitVerificationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request payload"}`, http.StatusBadRequest)
+		return
+	}
+
+	profile, err := h.landlordService.SubmitVerificationRequest(r.Context(), userID, req)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(profile)
 }
 
@@ -68,7 +89,7 @@ func (h *LandlordHandler) GetProperties(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(properties)
 }
 
-func (h *LandlordHandler) CreateUnit(w http.ResponseWriter, r *http.Request) {
+func (h *LandlordHandler) DeleteProperty(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
 	propertyID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
@@ -76,19 +97,59 @@ func (h *LandlordHandler) CreateUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req domain.CreateUnitRequest
+	if err := h.landlordService.DeleteProperty(r.Context(), userID, propertyID); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "property deleted"})
+}
+
+func (h *LandlordHandler) UpdateProperty(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
+	propertyID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid property id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var req domain.UpdatePropertyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid input"}`, http.StatusBadRequest)
 		return
 	}
 
-	res, err := h.landlordService.CreateUnit(r.Context(), userID, propertyID, req)
+	res, err := h.landlordService.UpdateProperty(r.Context(), userID, propertyID, req)
 	if err != nil {
-		if err == domain.ErrLandlordNotVerified || err == domain.ErrForbidden {
-			w.WriteHeader(http.StatusForbidden)
-			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
-			return
-		}
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(res)
+}
+
+// Category handlers
+
+func (h *LandlordHandler) AddCategory(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
+	propertyID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid property id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var req domain.CreateCategoryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid input"}`, http.StatusBadRequest)
+		return
+	}
+
+	res, err := h.landlordService.AddCategory(r.Context(), userID, propertyID, req)
+	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
@@ -99,27 +160,22 @@ func (h *LandlordHandler) CreateUnit(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(res)
 }
 
-func (h *LandlordHandler) UpdateUnit(w http.ResponseWriter, r *http.Request) {
+func (h *LandlordHandler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
-	unitID, err := uuid.Parse(chi.URLParam(r, "id"))
+	categoryID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, `{"error":"invalid unit id"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"invalid category id"}`, http.StatusBadRequest)
 		return
 	}
 
-	var req domain.UpdateUnitRequest
+	var req domain.UpdateCategoryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid input"}`, http.StatusBadRequest)
 		return
 	}
 
-	res, err := h.landlordService.UpdateUnit(r.Context(), userID, unitID, req)
+	res, err := h.landlordService.UpdateCategory(r.Context(), userID, categoryID, req)
 	if err != nil {
-		if err == domain.ErrLandlordNotVerified || err == domain.ErrForbidden {
-			w.WriteHeader(http.StatusForbidden)
-			json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
-			return
-		}
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
@@ -127,4 +183,48 @@ func (h *LandlordHandler) UpdateUnit(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(res)
+}
+
+func (h *LandlordHandler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
+	categoryID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid category id"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := h.landlordService.DeleteCategory(r.Context(), userID, categoryID); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "category deleted"})
+}
+
+func (h *LandlordHandler) AdjustQuantity(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
+	categoryID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid category id"}`, http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Delta int `json:"delta"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid input"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := h.landlordService.AdjustCategoryQuantity(r.Context(), userID, categoryID, req.Delta); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "quantity updated"})
 }

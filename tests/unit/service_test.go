@@ -85,6 +85,8 @@ func (m *MockRepo) CreateAuditLog(ctx context.Context, l *domain.AdminAuditLog) 
 	return m.Called(ctx, l).Error(0)
 }
 func (m *MockRepo) GetAuditLogs(ctx context.Context) ([]domain.AdminAuditLog, error) { return nil, nil }
+func (m *MockRepo) GetCustomers(ctx context.Context) ([]domain.CustomerView, error) { return nil, nil }
+func (m *MockRepo) GetAllLandlordProfiles(ctx context.Context) ([]domain.AgentView, error) { return nil, nil }
 func (m *MockRepo) GetUnitContactDetails(ctx context.Context, unitID uuid.UUID) (*domain.ContactInfoResponse, error) {
 	args := m.Called(ctx, unitID)
 	if args.Get(0) == nil {

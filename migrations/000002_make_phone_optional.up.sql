@@ -1,0 +1,4 @@
+ALTER TABLE users ALTER COLUMN phone DROP NOT NULL;
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_phone_key;
+
+ALTER TABLE units DROP CONSTRAINT IF EXISTS units_unit_type_check;

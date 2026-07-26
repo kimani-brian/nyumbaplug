@@ -16,6 +16,9 @@ type AdminService interface {
 	GetReports(ctx context.Context, resolved *bool) ([]domain.PropertyReport, error)
 	ResolveReport(ctx context.Context, reportID uuid.UUID) error
 	GetAuditLogs(ctx context.Context) ([]domain.AdminAuditLog, error)
+	GetCustomers(ctx context.Context) ([]domain.CustomerView, error)
+	GetAllAgents(ctx context.Context) ([]domain.AgentView, error)
+	GetAgentProperties(ctx context.Context, landlordProfileID uuid.UUID) ([]domain.Property, error)
 }
 
 type adminService struct {
@@ -122,4 +125,27 @@ func (s *adminService) ResolveReport(ctx context.Context, reportID uuid.UUID) er
 
 func (s *adminService) GetAuditLogs(ctx context.Context) ([]domain.AdminAuditLog, error) {
 	return s.repo.GetAuditLogs(ctx)
+}
+
+func (s *adminService) GetCustomers(ctx context.Context) ([]domain.CustomerView, error) {
+	return s.repo.GetCustomers(ctx)
+}
+
+func (s *adminService) GetAllAgents(ctx context.Context) ([]domain.AgentView, error) {
+	return s.repo.GetAllLandlordProfiles(ctx)
+}
+
+func (s *adminService) GetAgentProperties(ctx context.Context, landlordProfileID uuid.UUID) ([]domain.Property, error) {
+	properties, err := s.repo.GetPropertiesByLandlordID(ctx, landlordProfileID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range properties {
+		cats, err := s.repo.GetCategoriesByPropertyID(ctx, properties[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		properties[i].Categories = cats
+	}
+	return properties, nil
 }

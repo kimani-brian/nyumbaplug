@@ -108,6 +108,43 @@ func (h *AdminHandler) ResolveReport(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"message": "report resolved successfully"})
 }
 
+func (h *AdminHandler) GetCustomers(w http.ResponseWriter, r *http.Request) {
+	customers, err := h.adminService.GetCustomers(r.Context())
+	if err != nil {
+		http.Error(w, `{"error":"failed to fetch customers"}`, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(customers)
+}
+
+func (h *AdminHandler) GetAllAgents(w http.ResponseWriter, r *http.Request) {
+	agents, err := h.adminService.GetAllAgents(r.Context())
+	if err != nil {
+		http.Error(w, `{"error":"failed to fetch agents"}`, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(agents)
+}
+
+func (h *AdminHandler) GetAgentProperties(w http.ResponseWriter, r *http.Request) {
+	landlordID, err := uuid.Parse(chi.URLParam(r, "landlord_id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid landlord_id"}`, http.StatusBadRequest)
+		return
+	}
+
+	properties, err := h.adminService.GetAgentProperties(r.Context(), landlordID)
+	if err != nil {
+		http.Error(w, `{"error":"failed to fetch agent properties"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(properties)
+}
+
 func (h *AdminHandler) GetAuditLog(w http.ResponseWriter, r *http.Request) {
 	logs, err := h.adminService.GetAuditLogs(r.Context())
 	if err != nil {

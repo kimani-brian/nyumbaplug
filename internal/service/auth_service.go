@@ -26,14 +26,17 @@ func NewAuthService(repo repository.Repository, jwtSecret string) AuthService {
 }
 
 func (s *authService) Register(ctx context.Context, req domain.RegisterRequest) (*domain.AuthResponse, error) {
-	if req.Phone == "" || req.Password == "" || req.Role == "" {
+	if req.Password == "" || req.Role == "" {
+		return nil, domain.ErrInvalidInput
+	}
+	if req.Email == nil || *req.Email == "" {
 		return nil, domain.ErrInvalidInput
 	}
 	if req.Role != domain.RoleLandlord && req.Role != domain.RoleTenant && req.Role != domain.RoleAdmin {
 		return nil, domain.ErrInvalidInput
 	}
 
-	existing, _ := s.repo.GetUserByPhoneOrEmail(ctx, req.Phone)
+	existing, _ := s.repo.GetUserByPhoneOrEmail(ctx, *req.Email)
 	if existing != nil {
 		return nil, domain.ErrUserAlreadyExists
 	}
@@ -52,29 +55,15 @@ func (s *authService) Register(ctx context.Context, req domain.RegisterRequest) 
 		PasswordHash: string(hash),
 		CreatedAt:    now,
 	}
+	if req.Phone != nil && *req.Phone == "" {
+		user.Phone = nil
+	}
 
 	if err := s.repo.CreateUser(ctx, user); err != nil {
 		return nil, err
 	}
 
-	if req.Role == domain.RoleLandlord {
-		if req.NationalIDNumber == "" {
-			return nil, domain.ErrInvalidInput
-		}
-		landlord := &domain.LandlordProfile{
-			ID:                     uuid.New(),
-			UserID:                 user.ID,
-			NationalIDNumber:       req.NationalIDNumber,
-			IDDocumentURL:          req.IDDocumentURL,
-			IsCaretaker:            req.IsCaretaker,
-			AuthorizedByLandlordID: req.AuthorizedByLandlordID,
-			VerificationStatus:     domain.StatusPending,
-			CreatedAt:              now,
-		}
-		if err := s.repo.CreateLandlordProfile(ctx, landlord); err != nil {
-			return nil, err
-		}
-	} else if req.Role == domain.RoleTenant {
+	if req.Role == domain.RoleTenant {
 		tenant := &domain.TenantProfile{
 			ID:        uuid.New(),
 			UserID:    user.ID,

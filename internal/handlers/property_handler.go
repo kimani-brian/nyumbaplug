@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -23,13 +22,7 @@ func NewPropertyHandler(propertyService service.PropertyService) *PropertyHandle
 func (h *PropertyHandler) SearchProperties(w http.ResponseWriter, r *http.Request) {
 	filter := domain.PropertyFilter{
 		Location: r.URL.Query().Get("location"),
-		UnitType: r.URL.Query().Get("unit_type"),
-	}
-
-	if bedroomsStr := r.URL.Query().Get("bedrooms"); bedroomsStr != "" {
-		if b, err := strconv.Atoi(bedroomsStr); err == nil {
-			filter.Bedrooms = &b
-		}
+		County:   r.URL.Query().Get("county"),
 	}
 
 	properties, err := h.propertyService.SearchProperties(r.Context(), filter)
@@ -49,15 +42,15 @@ func (h *PropertyHandler) GetPropertyDetail(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	property, units, err := h.propertyService.GetPropertyDetail(r.Context(), id)
+	property, categories, err := h.propertyService.GetPropertyDetail(r.Context(), id)
 	if err != nil {
 		http.Error(w, `{"error":"property not found or unverified"}`, http.StatusNotFound)
 		return
 	}
 
 	resp := map[string]interface{}{
-		"property": property,
-		"units":    units,
+		"property":   property,
+		"categories": categories,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -65,20 +58,20 @@ func (h *PropertyHandler) GetPropertyDetail(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *PropertyHandler) GetUnitContact(w http.ResponseWriter, r *http.Request) {
-	unitID, err := uuid.Parse(chi.URLParam(r, "id"))
+	categoryID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, `{"error":"invalid unit id"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"invalid category id"}`, http.StatusBadRequest)
 		return
 	}
 
-	contact, err := h.propertyService.GetUnitContact(r.Context(), unitID)
+	contact, err := h.propertyService.GetUnitContact(r.Context(), categoryID)
 	if err != nil {
 		if err == domain.ErrContactNotAvailable {
 			w.WriteHeader(http.StatusForbidden)
-			json.NewEncoder(w).Encode(map[string]string{"error": "contact details only available for vacant units owned by verified landlords"})
+			json.NewEncoder(w).Encode(map[string]string{"error": "contact details only available for verified landlords"})
 			return
 		}
-		http.Error(w, `{"error":"unit not found"}`, http.StatusNotFound)
+		http.Error(w, `{"error":"category not found"}`, http.StatusNotFound)
 		return
 	}
 
@@ -93,16 +86,15 @@ func (h *PropertyHandler) ReportProperty(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	userID := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
-
 	var req struct {
 		Reason string `json:"reason"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Reason == "" {
-		http.Error(w, `{"error":"reason is required"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"report reason is required"}`, http.StatusBadRequest)
 		return
 	}
 
+	userID := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
 	if err := h.propertyService.ReportProperty(r.Context(), userID, propertyID, req.Reason); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
@@ -111,5 +103,5 @@ func (h *PropertyHandler) ReportProperty(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{"message": "property reported successfully"})
+	json.NewEncoder(w).Encode(map[string]string{"message": "report submitted"})
 }
