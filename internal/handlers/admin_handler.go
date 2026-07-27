@@ -145,6 +145,24 @@ func (h *AdminHandler) GetAgentProperties(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(properties)
 }
 
+func (h *AdminHandler) GetAgentProfile(w http.ResponseWriter, r *http.Request) {
+	landlordID, err := uuid.Parse(chi.URLParam(r, "landlord_id"))
+	if err != nil {
+		http.Error(w, `{"error":"invalid landlord_id"}`, http.StatusBadRequest)
+		return
+	}
+
+	profile, err := h.adminService.GetAgentProfile(r.Context(), landlordID)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "agent not found"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(profile)
+}
+
 func (h *AdminHandler) GetAuditLog(w http.ResponseWriter, r *http.Request) {
 	logs, err := h.adminService.GetAuditLogs(r.Context())
 	if err != nil {

@@ -67,6 +67,7 @@ func (s *authService) Register(ctx context.Context, req domain.RegisterRequest) 
 		tenant := &domain.TenantProfile{
 			ID:        uuid.New(),
 			UserID:    user.ID,
+			FullName:  req.FullName,
 			CreatedAt: now,
 		}
 		if err := s.repo.CreateTenantProfile(ctx, tenant); err != nil {

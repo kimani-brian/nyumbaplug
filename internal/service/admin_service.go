@@ -19,6 +19,7 @@ type AdminService interface {
 	GetCustomers(ctx context.Context) ([]domain.CustomerView, error)
 	GetAllAgents(ctx context.Context) ([]domain.AgentView, error)
 	GetAgentProperties(ctx context.Context, landlordProfileID uuid.UUID) ([]domain.Property, error)
+	GetAgentProfile(ctx context.Context, landlordProfileID uuid.UUID) (*domain.LandlordProfile, error)
 }
 
 type adminService struct {
@@ -63,6 +64,8 @@ func (s *adminService) ApproveLandlord(ctx context.Context, adminID, landlordID 
 	profile.VerificationStatus = domain.StatusVerified
 	profile.VerifiedBy = &adminID
 	profile.VerifiedAt = &now
+	profile.RevokedAt = nil
+	profile.RevokeReason = nil
 
 	if err := s.repo.UpdateLandlordVerification(ctx, profile); err != nil {
 		return err
@@ -133,6 +136,10 @@ func (s *adminService) GetCustomers(ctx context.Context) ([]domain.CustomerView,
 
 func (s *adminService) GetAllAgents(ctx context.Context) ([]domain.AgentView, error) {
 	return s.repo.GetAllLandlordProfiles(ctx)
+}
+
+func (s *adminService) GetAgentProfile(ctx context.Context, landlordProfileID uuid.UUID) (*domain.LandlordProfile, error) {
+	return s.repo.GetLandlordProfileByID(ctx, landlordProfileID)
 }
 
 func (s *adminService) GetAgentProperties(ctx context.Context, landlordProfileID uuid.UUID) ([]domain.Property, error) {

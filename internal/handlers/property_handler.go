@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -21,8 +22,19 @@ func NewPropertyHandler(propertyService service.PropertyService) *PropertyHandle
 
 func (h *PropertyHandler) SearchProperties(w http.ResponseWriter, r *http.Request) {
 	filter := domain.PropertyFilter{
-		Location: r.URL.Query().Get("location"),
-		County:   r.URL.Query().Get("county"),
+		Query:  r.URL.Query().Get("q"),
+		County: r.URL.Query().Get("county"),
+	}
+
+	if minRentStr := r.URL.Query().Get("min_rent"); minRentStr != "" {
+		if v, err := strconv.ParseFloat(minRentStr, 64); err == nil {
+			filter.MinRent = &v
+		}
+	}
+	if maxRentStr := r.URL.Query().Get("max_rent"); maxRentStr != "" {
+		if v, err := strconv.ParseFloat(maxRentStr, 64); err == nil {
+			filter.MaxRent = &v
+		}
 	}
 
 	properties, err := h.propertyService.SearchProperties(r.Context(), filter)

@@ -22,6 +22,7 @@ type Repository interface {
 	GetLandlordProfileByUserID(ctx context.Context, userID uuid.UUID) (*domain.LandlordProfile, error)
 	GetLandlordProfilesByStatus(ctx context.Context, status string) ([]domain.LandlordProfile, error)
 	UpdateLandlordVerification(ctx context.Context, profile *domain.LandlordProfile) error
+	UpdateLandlordProfile(ctx context.Context, profile *domain.LandlordProfile) error
 
 	CreateTenantProfile(ctx context.Context, profile *domain.TenantProfile) error
 	GetTenantProfileByUserID(ctx context.Context, userID uuid.UUID) (*domain.TenantProfile, error)
@@ -159,16 +160,22 @@ func (r *PostgresRepo) UpdateLandlordVerification(ctx context.Context, lp *domai
 	return err
 }
 
+func (r *PostgresRepo) UpdateLandlordProfile(ctx context.Context, lp *domain.LandlordProfile) error {
+	query := `UPDATE landlord_profiles SET full_name = $1, id_document_url = $2 WHERE id = $3`
+	_, err := r.db.ExecContext(ctx, query, lp.FullName, lp.IDDocumentURL, lp.ID)
+	return err
+}
+
 func (r *PostgresRepo) CreateTenantProfile(ctx context.Context, tp *domain.TenantProfile) error {
-	query := `INSERT INTO tenant_profiles (id, user_id, created_at) VALUES ($1, $2, $3)`
-	_, err := r.db.ExecContext(ctx, query, tp.ID, tp.UserID, tp.CreatedAt)
+	query := `INSERT INTO tenant_profiles (id, user_id, full_name, created_at) VALUES ($1, $2, $3, $4)`
+	_, err := r.db.ExecContext(ctx, query, tp.ID, tp.UserID, tp.FullName, tp.CreatedAt)
 	return err
 }
 
 func (r *PostgresRepo) GetTenantProfileByUserID(ctx context.Context, userID uuid.UUID) (*domain.TenantProfile, error) {
 	tp := &domain.TenantProfile{}
-	query := `SELECT id, user_id, created_at FROM tenant_profiles WHERE user_id = $1`
-	err := r.db.QueryRowContext(ctx, query, userID).Scan(&tp.ID, &tp.UserID, &tp.CreatedAt)
+	query := `SELECT id, user_id, full_name, created_at FROM tenant_profiles WHERE user_id = $1`
+	err := r.db.QueryRowContext(ctx, query, userID).Scan(&tp.ID, &tp.UserID, &tp.FullName, &tp.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, domain.ErrUserNotFound
 	}
@@ -230,7 +237,8 @@ func (r *PostgresRepo) SearchVerifiedProperties(ctx context.Context, filter doma
 	query := `
 		SELECT p.id, p.landlord_id, p.name, p.location, p.county, p.address, p.maps_url, p.description, p.image_url, p.created_at,
 		       COALESCE(MIN(c.rent_amount), 0) as min_rent,
-		       COALESCE(SUM(c.quantity_available), 0) as total_units
+		       COALESCE(SUM(c.quantity_available), 0) as total_units,
+		       COALESCE(lp.full_name, '') as landlord_name
 		FROM properties p
 		JOIN landlord_profiles lp ON p.landlord_id = lp.id
 		LEFT JOIN unit_categories c ON c.property_id = p.id
@@ -239,9 +247,10 @@ func (r *PostgresRepo) SearchVerifiedProperties(ctx context.Context, filter doma
 	args := []interface{}{}
 	argId := 1
 
-	if filter.Location != "" {
-		query += fmt.Sprintf(" AND p.location ILIKE $%d", argId)
-		args = append(args, "%"+filter.Location+"%")
+	if filter.Query != "" {
+		q := "%" + filter.Query + "%"
+		query += fmt.Sprintf(" AND (p.location ILIKE $%d OR p.county ILIKE $%d OR p.name ILIKE $%d OR p.description ILIKE $%d OR EXISTS (SELECT 1 FROM unit_categories c2 WHERE c2.property_id = p.id AND c2.name ILIKE $%d))", argId, argId, argId, argId, argId)
+		args = append(args, q)
 		argId++
 	}
 
@@ -251,7 +260,24 @@ func (r *PostgresRepo) SearchVerifiedProperties(ctx context.Context, filter doma
 		argId++
 	}
 
-	query += ` GROUP BY p.id, p.landlord_id, p.name, p.location, p.county, p.address, p.maps_url, p.description, p.image_url, p.created_at`
+	query += ` GROUP BY p.id, p.landlord_id, p.name, p.location, p.county, p.address, p.maps_url, p.description, p.image_url, p.created_at, lp.full_name`
+
+	havingAdded := false
+	if filter.MinRent != nil && *filter.MinRent > 0 {
+		query += fmt.Sprintf(" HAVING COALESCE(MIN(c.rent_amount), 0) >= $%d", argId)
+		args = append(args, *filter.MinRent)
+		argId++
+		havingAdded = true
+	}
+	if filter.MaxRent != nil && *filter.MaxRent > 0 {
+		if havingAdded {
+			query += fmt.Sprintf(" AND COALESCE(MIN(c.rent_amount), 0) <= $%d", argId)
+		} else {
+			query += fmt.Sprintf(" HAVING COALESCE(MIN(c.rent_amount), 0) <= $%d", argId)
+		}
+		args = append(args, *filter.MaxRent)
+		argId++
+	}
 	query += " ORDER BY p.created_at DESC"
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
@@ -265,7 +291,7 @@ func (r *PostgresRepo) SearchVerifiedProperties(ctx context.Context, filter doma
 		var p domain.Property
 		var minRent float64
 		var totalUnits int
-		if err := rows.Scan(&p.ID, &p.LandlordID, &p.Name, &p.Location, &p.County, &p.Address, &p.MapsURL, &p.Description, &p.ImageURL, &p.CreatedAt, &minRent, &totalUnits); err != nil {
+		if err := rows.Scan(&p.ID, &p.LandlordID, &p.Name, &p.Location, &p.County, &p.Address, &p.MapsURL, &p.Description, &p.ImageURL, &p.CreatedAt, &minRent, &totalUnits, &p.LandlordName); err != nil {
 			return nil, err
 		}
 		p.MinRent = &minRent
@@ -450,7 +476,7 @@ func (r *PostgresRepo) ResolvePropertyReport(ctx context.Context, id uuid.UUID) 
 }
 
 func (r *PostgresRepo) GetCustomers(ctx context.Context) ([]domain.CustomerView, error) {
-	query := `SELECT u.id, u.email, u.phone, u.created_at FROM users u JOIN tenant_profiles tp ON u.id = tp.user_id WHERE u.role = 'tenant' ORDER BY u.created_at DESC`
+	query := `SELECT u.id, u.email, u.phone, COALESCE(tp.full_name, ''), u.created_at FROM users u JOIN tenant_profiles tp ON u.id = tp.user_id WHERE u.role = 'tenant' ORDER BY u.created_at DESC`
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
@@ -460,7 +486,7 @@ func (r *PostgresRepo) GetCustomers(ctx context.Context) ([]domain.CustomerView,
 	var list []domain.CustomerView
 	for rows.Next() {
 		var c domain.CustomerView
-		if err := rows.Scan(&c.ID, &c.Email, &c.Phone, &c.CreatedAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.Email, &c.Phone, &c.FullName, &c.CreatedAt); err != nil {
 			return nil, err
 		}
 		list = append(list, c)

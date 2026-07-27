@@ -62,7 +62,7 @@ func main() {
 	r.Use(chiMiddleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
-		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
 		AllowCredentials: true,
 	}))
@@ -94,6 +94,7 @@ func main() {
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireRole(domain.RoleLandlord))
 				r.Get("/landlord/me", landlordHandler.GetMe)
+				r.Put("/landlord/profile", landlordHandler.UpdateProfile)
 				r.Post("/landlord/profile", landlordHandler.SubmitVerification)
 				r.Post("/landlord/properties", landlordHandler.CreateProperty)
 				r.Get("/landlord/properties", landlordHandler.GetProperties)
@@ -117,6 +118,7 @@ func main() {
 				r.Get("/admin/customers", adminHandler.GetCustomers)
 				r.Get("/admin/agents", adminHandler.GetAllAgents)
 				r.Get("/admin/agents/{landlord_id}/properties", adminHandler.GetAgentProperties)
+				r.Get("/admin/agents/{landlord_id}/profile", adminHandler.GetAgentProfile)
 			})
 
 			// Upload (any authenticated user)

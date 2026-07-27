@@ -12,6 +12,7 @@ import (
 type LandlordService interface {
 	GetProfile(ctx context.Context, userID uuid.UUID) (*domain.LandlordProfile, error)
 	SubmitVerificationRequest(ctx context.Context, userID uuid.UUID, req domain.SubmitVerificationRequest) (*domain.LandlordProfile, error)
+	UpdateProfile(ctx context.Context, userID uuid.UUID, req domain.UpdateLandlordProfileRequest) (*domain.LandlordProfile, error)
 	CreateProperty(ctx context.Context, userID uuid.UUID, req domain.CreatePropertyRequest) (*domain.Property, error)
 	GetProperties(ctx context.Context, userID uuid.UUID) ([]domain.Property, error)
 	DeleteProperty(ctx context.Context, userID, propertyID uuid.UUID) error
@@ -32,6 +33,32 @@ func NewLandlordService(repo repository.Repository) LandlordService {
 
 func (s *landlordService) GetProfile(ctx context.Context, userID uuid.UUID) (*domain.LandlordProfile, error) {
 	return s.repo.GetLandlordProfileByUserID(ctx, userID)
+}
+
+func (s *landlordService) UpdateProfile(ctx context.Context, userID uuid.UUID, req domain.UpdateLandlordProfileRequest) (*domain.LandlordProfile, error) {
+	profile, err := s.repo.GetLandlordProfileByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.FullName != nil {
+		profile.FullName = *req.FullName
+	}
+	if req.IDDocumentURL != nil {
+		profile.IDDocumentURL = req.IDDocumentURL
+	}
+
+	if req.Phone != nil {
+		if err := s.repo.UpdateUserPhone(ctx, userID, req.Phone); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := s.repo.UpdateLandlordProfile(ctx, profile); err != nil {
+		return nil, err
+	}
+
+	return profile, nil
 }
 
 func (s *landlordService) SubmitVerificationRequest(ctx context.Context, userID uuid.UUID, req domain.SubmitVerificationRequest) (*domain.LandlordProfile, error) {

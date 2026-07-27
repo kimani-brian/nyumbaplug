@@ -50,6 +50,7 @@ type LandlordProfile struct {
 type TenantProfile struct {
 	ID        uuid.UUID `json:"id"`
 	UserID    uuid.UUID `json:"user_id"`
+	FullName  string    `json:"full_name"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -68,6 +69,7 @@ type Property struct {
 	MinRent       *float64       `json:"min_rent,omitempty"`
 	TotalUnits    *int           `json:"total_units,omitempty"`
 	MapCoords     *string        `json:"map_coords,omitempty"`
+	LandlordName  string         `json:"landlord_name,omitempty"`
 }
 
 type UnitCategory struct {
@@ -108,6 +110,7 @@ type RegisterRequest struct {
 	Email                  *string    `json:"email"`
 	Password               string     `json:"password"`
 	Role                   string     `json:"role"`
+	FullName               string     `json:"full_name,omitempty"`
 	NationalIDNumber       string     `json:"national_id_number,omitempty"`
 	IDDocumentURL          *string    `json:"id_document_url,omitempty"`
 	IsCaretaker            bool       `json:"is_caretaker,omitempty"`
@@ -119,6 +122,12 @@ type SubmitVerificationRequest struct {
 	Phone            *string `json:"phone,omitempty"`
 	NationalIDNumber string  `json:"national_id_number"`
 	IDDocumentURL    *string `json:"id_document_url,omitempty"`
+}
+
+type UpdateLandlordProfileRequest struct {
+	FullName      *string `json:"full_name,omitempty"`
+	Phone         *string `json:"phone,omitempty"`
+	IDDocumentURL *string `json:"id_document_url,omitempty"`
 }
 
 type LoginRequest struct {
@@ -174,8 +183,10 @@ type RevokeRequest struct {
 }
 
 type PropertyFilter struct {
-	Location string
-	County   string
+	Query   string
+	County  string
+	MinRent *float64
+	MaxRent *float64
 }
 
 type ContactInfoResponse struct {
@@ -193,6 +204,7 @@ type CustomerView struct {
 	ID        uuid.UUID `json:"id"`
 	Email     *string   `json:"email,omitempty"`
 	Phone     *string   `json:"phone,omitempty"`
+	FullName  string    `json:"full_name"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
