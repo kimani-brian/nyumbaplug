@@ -3,6 +3,7 @@ package unit
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/kenya-houses/backend/internal/domain"
@@ -21,6 +22,21 @@ func (m *MockRepo) GetUserByID(ctx context.Context, id uuid.UUID) (*domain.User,
 }
 func (m *MockRepo) GetUserByPhoneOrEmail(ctx context.Context, id string) (*domain.User, error) {
 	return nil, nil
+}
+func (m *MockRepo) UpdateUserPhone(ctx context.Context, userID uuid.UUID, phone *string) error {
+	return nil
+}
+func (m *MockRepo) DeleteUser(ctx context.Context, userID uuid.UUID) error {
+	return nil
+}
+func (m *MockRepo) SetUserOTP(ctx context.Context, userID uuid.UUID, code string, expiresAt, sentAt time.Time) error {
+	return nil
+}
+func (m *MockRepo) GetUserOTP(ctx context.Context, userID uuid.UUID) (string, time.Time, time.Time, error) {
+	return "", time.Time{}, time.Time{}, nil
+}
+func (m *MockRepo) VerifyUserEmail(ctx context.Context, userID uuid.UUID) error {
+	return nil
 }
 func (m *MockRepo) CreateLandlordProfile(ctx context.Context, p *domain.LandlordProfile) error {
 	return nil
@@ -45,10 +61,19 @@ func (m *MockRepo) GetLandlordProfilesByStatus(ctx context.Context, s string) ([
 func (m *MockRepo) UpdateLandlordVerification(ctx context.Context, p *domain.LandlordProfile) error {
 	return m.Called(ctx, p).Error(0)
 }
+func (m *MockRepo) UpdateLandlordProfile(ctx context.Context, p *domain.LandlordProfile) error {
+	return nil
+}
 func (m *MockRepo) CreateTenantProfile(ctx context.Context, p *domain.TenantProfile) error {
 	return nil
 }
 func (m *MockRepo) GetTenantProfileByUserID(ctx context.Context, id uuid.UUID) (*domain.TenantProfile, error) {
+	return nil, nil
+}
+func (m *MockRepo) UpdateTenantProfile(ctx context.Context, p *domain.TenantProfile) error {
+	return nil
+}
+func (m *MockRepo) GetCustomerProfile(ctx context.Context, id uuid.UUID) (*domain.CustomerProfile, error) {
 	return nil, nil
 }
 func (m *MockRepo) CreateProperty(ctx context.Context, p *domain.Property) error {
@@ -66,18 +91,29 @@ func (m *MockRepo) GetPropertiesByLandlordID(ctx context.Context, id uuid.UUID) 
 func (m *MockRepo) SearchVerifiedProperties(ctx context.Context, f domain.PropertyFilter) ([]domain.Property, error) {
 	return nil, nil
 }
-func (m *MockRepo) CreateUnit(ctx context.Context, u *domain.Unit) error { return nil }
-func (m *MockRepo) GetUnitByID(ctx context.Context, id uuid.UUID) (*domain.Unit, error) {
+func (m *MockRepo) UpdateProperty(ctx context.Context, p *domain.Property) error { return nil }
+func (m *MockRepo) DeleteProperty(ctx context.Context, id uuid.UUID) error       { return nil }
+func (m *MockRepo) CreateCategory(ctx context.Context, c *domain.UnitCategory) error {
+	return nil
+}
+func (m *MockRepo) GetCategoryByID(ctx context.Context, id uuid.UUID) (*domain.UnitCategory, error) {
 	return nil, nil
 }
-func (m *MockRepo) GetUnitsByPropertyID(ctx context.Context, id uuid.UUID) ([]domain.Unit, error) {
+func (m *MockRepo) GetCategoriesByPropertyID(ctx context.Context, id uuid.UUID) ([]domain.UnitCategory, error) {
 	return nil, nil
 }
-func (m *MockRepo) UpdateUnit(ctx context.Context, u *domain.Unit) error { return nil }
+func (m *MockRepo) UpdateCategory(ctx context.Context, c *domain.UnitCategory) error { return nil }
+func (m *MockRepo) DeleteCategory(ctx context.Context, id uuid.UUID) error           { return nil }
+func (m *MockRepo) UpdateCategoryQuantity(ctx context.Context, id uuid.UUID, delta int) error {
+	return nil
+}
 func (m *MockRepo) CreatePropertyReport(ctx context.Context, r *domain.PropertyReport) error {
 	return nil
 }
 func (m *MockRepo) GetPropertyReports(ctx context.Context, res *bool) ([]domain.PropertyReport, error) {
+	return nil, nil
+}
+func (m *MockRepo) GetPropertyReportByID(ctx context.Context, id uuid.UUID) (*domain.PropertyReport, error) {
 	return nil, nil
 }
 func (m *MockRepo) ResolvePropertyReport(ctx context.Context, id uuid.UUID) error { return nil }
@@ -85,8 +121,13 @@ func (m *MockRepo) CreateAuditLog(ctx context.Context, l *domain.AdminAuditLog) 
 	return m.Called(ctx, l).Error(0)
 }
 func (m *MockRepo) GetAuditLogs(ctx context.Context) ([]domain.AdminAuditLog, error) { return nil, nil }
-func (m *MockRepo) GetCustomers(ctx context.Context) ([]domain.CustomerView, error) { return nil, nil }
-func (m *MockRepo) GetAllLandlordProfiles(ctx context.Context) ([]domain.AgentView, error) { return nil, nil }
+func (m *MockRepo) GetCustomers(ctx context.Context) ([]domain.CustomerView, error)  { return nil, nil }
+func (m *MockRepo) GetAllLandlordProfiles(ctx context.Context) ([]domain.PropertyManagerView, error) {
+	return nil, nil
+}
+func (m *MockRepo) GetPropertyManagerDetailByID(ctx context.Context, id uuid.UUID) (*domain.PropertyManagerDetail, error) {
+	return nil, nil
+}
 func (m *MockRepo) GetUnitContactDetails(ctx context.Context, unitID uuid.UUID) (*domain.ContactInfoResponse, error) {
 	args := m.Called(ctx, unitID)
 	if args.Get(0) == nil {

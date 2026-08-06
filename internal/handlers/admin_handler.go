@@ -98,7 +98,9 @@ func (h *AdminHandler) ResolveReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.adminService.ResolveReport(r.Context(), id); err != nil {
+	adminID := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
+
+	if err := h.adminService.ResolveReport(r.Context(), adminID, id); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
@@ -118,26 +120,44 @@ func (h *AdminHandler) GetCustomers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(customers)
 }
 
-func (h *AdminHandler) GetAllAgents(w http.ResponseWriter, r *http.Request) {
-	agents, err := h.adminService.GetAllAgents(r.Context())
+func (h *AdminHandler) GetCustomerProfile(w http.ResponseWriter, r *http.Request) {
+	userID, err := uuid.Parse(chi.URLParam(r, "customer_id"))
 	if err != nil {
-		http.Error(w, `{"error":"failed to fetch agents"}`, http.StatusInternalServerError)
+		http.Error(w, `{"error":"invalid customer_id"}`, http.StatusBadRequest)
+		return
+	}
+
+	profile, err := h.adminService.GetCustomerProfile(r.Context(), userID)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "customer not found"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(profile)
+}
+
+func (h *AdminHandler) GetAllPropertyManagers(w http.ResponseWriter, r *http.Request) {
+	managers, err := h.adminService.GetAllPropertyManagers(r.Context())
+	if err != nil {
+		http.Error(w, `{"error":"failed to fetch property managers"}`, http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(agents)
+	json.NewEncoder(w).Encode(managers)
 }
 
-func (h *AdminHandler) GetAgentProperties(w http.ResponseWriter, r *http.Request) {
+func (h *AdminHandler) GetPropertyManagerProperties(w http.ResponseWriter, r *http.Request) {
 	landlordID, err := uuid.Parse(chi.URLParam(r, "landlord_id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid landlord_id"}`, http.StatusBadRequest)
 		return
 	}
 
-	properties, err := h.adminService.GetAgentProperties(r.Context(), landlordID)
+	properties, err := h.adminService.GetPropertyManagerProperties(r.Context(), landlordID)
 	if err != nil {
-		http.Error(w, `{"error":"failed to fetch agent properties"}`, http.StatusInternalServerError)
+		http.Error(w, `{"error":"failed to fetch property manager properties"}`, http.StatusInternalServerError)
 		return
 	}
 
@@ -145,17 +165,17 @@ func (h *AdminHandler) GetAgentProperties(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(properties)
 }
 
-func (h *AdminHandler) GetAgentProfile(w http.ResponseWriter, r *http.Request) {
+func (h *AdminHandler) GetPropertyManagerProfile(w http.ResponseWriter, r *http.Request) {
 	landlordID, err := uuid.Parse(chi.URLParam(r, "landlord_id"))
 	if err != nil {
 		http.Error(w, `{"error":"invalid landlord_id"}`, http.StatusBadRequest)
 		return
 	}
 
-	profile, err := h.adminService.GetAgentProfile(r.Context(), landlordID)
+	profile, err := h.adminService.GetPropertyManagerProfile(r.Context(), landlordID)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]string{"error": "agent not found"})
+		json.NewEncoder(w).Encode(map[string]string{"error": "property manager not found"})
 		return
 	}
 

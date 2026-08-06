@@ -39,6 +39,53 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(res)
 }
 
+func (h *AuthHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
+	var req domain.VerifyEmailRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request payload"}`, http.StatusBadRequest)
+		return
+	}
+
+	res, err := h.authService.VerifyEmail(r.Context(), req)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if err == domain.ErrInvalidOtp || err == domain.ErrInvalidInput {
+			status = http.StatusBadRequest
+		}
+		w.WriteHeader(status)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(res)
+}
+
+func (h *AuthHandler) ResendOtp(w http.ResponseWriter, r *http.Request) {
+	var req domain.ResendOtpRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request payload"}`, http.StatusBadRequest)
+		return
+	}
+
+	if err := h.authService.ResendOtp(r.Context(), req.Email); err != nil {
+		status := http.StatusInternalServerError
+		if err == domain.ErrInvalidInput {
+			status = http.StatusBadRequest
+		} else if err == domain.ErrUserNotFound {
+			status = http.StatusNotFound
+		} else if err == domain.ErrOtpTooSoon {
+			status = http.StatusTooManyRequests
+		}
+		w.WriteHeader(status)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "verification code sent"})
+}
+
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req domain.LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

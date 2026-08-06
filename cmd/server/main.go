@@ -19,6 +19,7 @@ import (
 	"github.com/kenya-houses/backend/internal/config"
 	"github.com/kenya-houses/backend/internal/domain"
 	"github.com/kenya-houses/backend/internal/handlers"
+	"github.com/kenya-houses/backend/internal/mail"
 	"github.com/kenya-houses/backend/internal/middleware"
 	"github.com/kenya-houses/backend/internal/repository"
 	"github.com/kenya-houses/backend/internal/service"
@@ -46,14 +47,18 @@ func main() {
 
 	ensureAdmin(context.Background(), repo, cfg)
 
-	authSvc := service.NewAuthService(repo, cfg.JWTSecret)
+	mailer := mail.NewResendSender(cfg.ResendAPIKey, cfg.ResendFromEmail)
+
+	authSvc := service.NewAuthService(repo, cfg.JWTSecret, mailer, *cfg)
 	adminSvc := service.NewAdminService(repo)
 	landlordSvc := service.NewLandlordService(repo)
+	tenantSvc := service.NewTenantService(repo)
 	propertySvc := service.NewPropertyService(repo)
 
 	authHandler := handlers.NewAuthHandler(authSvc)
 	adminHandler := handlers.NewAdminHandler(adminSvc)
 	landlordHandler := handlers.NewLandlordHandler(landlordSvc)
+	tenantHandler := handlers.NewTenantHandler(tenantSvc)
 	propertyHandler := handlers.NewPropertyHandler(propertySvc)
 
 	r := chi.NewRouter()
@@ -74,6 +79,8 @@ func main() {
 		// Public Auth Endpoints
 		r.Post("/auth/register", authHandler.Register)
 		r.Post("/auth/login", authHandler.Login)
+		r.Post("/auth/verify-email", authHandler.VerifyEmail)
+		r.Post("/auth/resend-otp", authHandler.ResendOtp)
 
 		// Public Browse Endpoints
 		r.Get("/properties", propertyHandler.SearchProperties)
@@ -88,6 +95,8 @@ func main() {
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireRole(domain.RoleTenant))
 				r.Post("/properties/{id}/report", propertyHandler.ReportProperty)
+				r.Get("/tenant/me", tenantHandler.GetMe)
+				r.Put("/tenant/profile", tenantHandler.UpdateProfile)
 			})
 
 			// Landlord Only
@@ -116,9 +125,10 @@ func main() {
 				r.Post("/admin/reports/{id}/resolve", adminHandler.ResolveReport)
 				r.Get("/admin/audit-log", adminHandler.GetAuditLog)
 				r.Get("/admin/customers", adminHandler.GetCustomers)
-				r.Get("/admin/agents", adminHandler.GetAllAgents)
-				r.Get("/admin/agents/{landlord_id}/properties", adminHandler.GetAgentProperties)
-				r.Get("/admin/agents/{landlord_id}/profile", adminHandler.GetAgentProfile)
+				r.Get("/admin/customers/{customer_id}/profile", adminHandler.GetCustomerProfile)
+				r.Get("/admin/property-managers", adminHandler.GetAllPropertyManagers)
+				r.Get("/admin/property-managers/{landlord_id}/properties", adminHandler.GetPropertyManagerProperties)
+				r.Get("/admin/property-managers/{landlord_id}/profile", adminHandler.GetPropertyManagerProfile)
 			})
 
 			// Upload (any authenticated user)

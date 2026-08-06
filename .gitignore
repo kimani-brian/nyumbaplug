@@ -13,6 +13,8 @@ go.work.sum
 
 # Environment
 .env
+.env.*
+!.env.example
 
 # IDE
 .idea/
@@ -30,4 +32,3 @@ Thumbs.db
 *.test.out
 *.prof
 tmp/
-.env.example

@@ -14,12 +14,13 @@ type AdminService interface {
 	ApproveLandlord(ctx context.Context, adminID, landlordID uuid.UUID) error
 	RevokeLandlord(ctx context.Context, adminID, landlordID uuid.UUID, reason string) error
 	GetReports(ctx context.Context, resolved *bool) ([]domain.PropertyReport, error)
-	ResolveReport(ctx context.Context, reportID uuid.UUID) error
+	ResolveReport(ctx context.Context, adminID, reportID uuid.UUID) error
 	GetAuditLogs(ctx context.Context) ([]domain.AdminAuditLog, error)
 	GetCustomers(ctx context.Context) ([]domain.CustomerView, error)
-	GetAllAgents(ctx context.Context) ([]domain.AgentView, error)
-	GetAgentProperties(ctx context.Context, landlordProfileID uuid.UUID) ([]domain.Property, error)
-	GetAgentProfile(ctx context.Context, landlordProfileID uuid.UUID) (*domain.LandlordProfile, error)
+	GetCustomerProfile(ctx context.Context, userID uuid.UUID) (*domain.CustomerProfile, error)
+	GetAllPropertyManagers(ctx context.Context) ([]domain.PropertyManagerView, error)
+	GetPropertyManagerProperties(ctx context.Context, landlordProfileID uuid.UUID) ([]domain.Property, error)
+	GetPropertyManagerProfile(ctx context.Context, landlordProfileID uuid.UUID) (*domain.PropertyManagerDetail, error)
 }
 
 type adminService struct {
@@ -122,8 +123,48 @@ func (s *adminService) GetReports(ctx context.Context, resolved *bool) ([]domain
 	return s.repo.GetPropertyReports(ctx, resolved)
 }
 
-func (s *adminService) ResolveReport(ctx context.Context, reportID uuid.UUID) error {
-	return s.repo.ResolvePropertyReport(ctx, reportID)
+func (s *adminService) ResolveReport(ctx context.Context, adminID, reportID uuid.UUID) error {
+	report, err := s.repo.GetPropertyReportByID(ctx, reportID)
+	if err != nil {
+		return err
+	}
+
+	// Auto-restore the property manager flagged in the report (Rule: resolve closes the loop —
+	// re-approves the landlord so their listings reappear in search).
+	if report.LandlordID != uuid.Nil {
+		if err := s.restoreLandlord(ctx, report.LandlordID); err != nil {
+			return err
+		}
+	}
+
+	if err := s.repo.ResolvePropertyReport(ctx, reportID); err != nil {
+		return err
+	}
+
+	// Business Rule 4: Audit log entry
+	auditLog := &domain.AdminAuditLog{
+		ID:         uuid.New(),
+		AdminID:    adminID,
+		Action:     "resolve_report",
+		TargetType: "property_report",
+		TargetID:   reportID,
+		CreatedAt:  time.Now(),
+	}
+	return s.repo.CreateAuditLog(ctx, auditLog)
+}
+
+// restoreLandlord re-approves a landlord profile, clearing any prior revocation.
+func (s *adminService) restoreLandlord(ctx context.Context, landlordID uuid.UUID) error {
+	profile, err := s.repo.GetLandlordProfileByID(ctx, landlordID)
+	if err != nil {
+		return err
+	}
+
+	profile.VerificationStatus = domain.StatusVerified
+	profile.RevokedAt = nil
+	profile.RevokeReason = nil
+
+	return s.repo.UpdateLandlordVerification(ctx, profile)
 }
 
 func (s *adminService) GetAuditLogs(ctx context.Context) ([]domain.AdminAuditLog, error) {
@@ -134,15 +175,19 @@ func (s *adminService) GetCustomers(ctx context.Context) ([]domain.CustomerView,
 	return s.repo.GetCustomers(ctx)
 }
 
-func (s *adminService) GetAllAgents(ctx context.Context) ([]domain.AgentView, error) {
+func (s *adminService) GetCustomerProfile(ctx context.Context, userID uuid.UUID) (*domain.CustomerProfile, error) {
+	return s.repo.GetCustomerProfile(ctx, userID)
+}
+
+func (s *adminService) GetAllPropertyManagers(ctx context.Context) ([]domain.PropertyManagerView, error) {
 	return s.repo.GetAllLandlordProfiles(ctx)
 }
 
-func (s *adminService) GetAgentProfile(ctx context.Context, landlordProfileID uuid.UUID) (*domain.LandlordProfile, error) {
-	return s.repo.GetLandlordProfileByID(ctx, landlordProfileID)
+func (s *adminService) GetPropertyManagerProfile(ctx context.Context, landlordProfileID uuid.UUID) (*domain.PropertyManagerDetail, error) {
+	return s.repo.GetPropertyManagerDetailByID(ctx, landlordProfileID)
 }
 
-func (s *adminService) GetAgentProperties(ctx context.Context, landlordProfileID uuid.UUID) ([]domain.Property, error) {
+func (s *adminService) GetPropertyManagerProperties(ctx context.Context, landlordProfileID uuid.UUID) ([]domain.Property, error) {
 	properties, err := s.repo.GetPropertiesByLandlordID(ctx, landlordProfileID)
 	if err != nil {
 		return nil, err

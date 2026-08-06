@@ -18,4 +18,6 @@ var (
 	ErrContactNotAvailable    = errors.New("contact details not available for non-vacant units or unverified landlords")
 	ErrInvalidInput           = errors.New("invalid request payload")
 	ErrCategoryNotFound       = errors.New("category not found")
+	ErrInvalidOtp             = errors.New("invalid or expired verification code")
+	ErrOtpTooSoon             = errors.New("a verification code was recently sent; try again shortly")
 )

@@ -99,7 +99,8 @@ func (h *PropertyHandler) ReportProperty(w http.ResponseWriter, r *http.Request)
 	}
 
 	var req struct {
-		Reason string `json:"reason"`
+		Reason  string `json:"reason"`
+		Details string `json:"details"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Reason == "" {
 		http.Error(w, `{"error":"report reason is required"}`, http.StatusBadRequest)
@@ -107,7 +108,7 @@ func (h *PropertyHandler) ReportProperty(w http.ResponseWriter, r *http.Request)
 	}
 
 	userID := r.Context().Value(middleware.UserIDKey).(uuid.UUID)
-	if err := h.propertyService.ReportProperty(r.Context(), userID, propertyID, req.Reason); err != nil {
+	if err := h.propertyService.ReportProperty(r.Context(), userID, propertyID, req.Reason, req.Details); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return

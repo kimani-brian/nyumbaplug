@@ -2,17 +2,22 @@ package config
 
 import (
 	"os"
+	"strconv"
 
 	"github.com/joho/godotenv"
 )
 
 type Config struct {
-	Port          string
-	DatabaseURL   string
-	JWTSecret     string
-	Environment   string
-	AdminEmail    string
-	AdminPassword string
+	Port               string
+	DatabaseURL        string
+	JWTSecret          string
+	Environment        string
+	AdminEmail         string
+	AdminPassword      string
+	ResendAPIKey       string
+	ResendFromEmail    string
+	OTPExpiryMinutes   int
+	OTPCooldownSeconds int
 }
 
 func Load() (*Config, error) {
@@ -48,12 +53,37 @@ func Load() (*Config, error) {
 		adminPassword = "AdminPass123!"
 	}
 
+	resendAPIKey := os.Getenv("RESEND_API_KEY")
+
+	resendFromEmail := os.Getenv("RESEND_FROM_EMAIL")
+	if resendFromEmail == "" {
+		resendFromEmail = "NyumbaPlug <onboarding@resend.dev>"
+	}
+
+	otpExpiryMinutes := 10
+	if v := os.Getenv("OTP_EXPIRY_MINUTES"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			otpExpiryMinutes = n
+		}
+	}
+
+	otpCooldownSeconds := 60
+	if v := os.Getenv("OTP_COOLDOWN_SECONDS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			otpCooldownSeconds = n
+		}
+	}
+
 	return &Config{
-		Port:          port,
-		DatabaseURL:   dbURL,
-		JWTSecret:     jwtSecret,
-		Environment:   env,
-		AdminEmail:    adminEmail,
-		AdminPassword: adminPassword,
+		Port:               port,
+		DatabaseURL:        dbURL,
+		JWTSecret:          jwtSecret,
+		Environment:        env,
+		AdminEmail:         adminEmail,
+		AdminPassword:      adminPassword,
+		ResendAPIKey:       resendAPIKey,
+		ResendFromEmail:    resendFromEmail,
+		OTPExpiryMinutes:   otpExpiryMinutes,
+		OTPCooldownSeconds: otpCooldownSeconds,
 	}, nil
 }

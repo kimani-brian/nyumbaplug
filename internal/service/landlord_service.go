@@ -44,6 +44,9 @@ func (s *landlordService) UpdateProfile(ctx context.Context, userID uuid.UUID, r
 	if req.FullName != nil {
 		profile.FullName = *req.FullName
 	}
+	if req.PageName != nil {
+		profile.PageName = req.PageName
+	}
 	if req.IDDocumentURL != nil {
 		profile.IDDocumentURL = req.IDDocumentURL
 	}
@@ -72,10 +75,33 @@ func (s *landlordService) SubmitVerificationRequest(ctx context.Context, userID 
 		}
 	}
 
-	profile := &domain.LandlordProfile{
+	// Upsert: the landlord profile may already exist (created at registration).
+	profile, err := s.repo.GetLandlordProfileByUserID(ctx, userID)
+	if err != nil && err != domain.ErrLandlordNotFound {
+		return nil, err
+	}
+
+	if profile != nil {
+		profile.FullName = req.FullName
+		profile.NationalIDNumber = req.NationalIDNumber
+		if req.IDDocumentURL != nil {
+			profile.IDDocumentURL = req.IDDocumentURL
+		}
+		if req.PageName != nil {
+			profile.PageName = req.PageName
+		}
+		profile.VerificationStatus = domain.StatusPending
+		if err := s.repo.UpdateLandlordProfile(ctx, profile); err != nil {
+			return nil, err
+		}
+		return profile, nil
+	}
+
+	profile = &domain.LandlordProfile{
 		ID:                 uuid.New(),
 		UserID:             userID,
 		FullName:           req.FullName,
+		PageName:           req.PageName,
 		NationalIDNumber:   req.NationalIDNumber,
 		IDDocumentURL:      req.IDDocumentURL,
 		VerificationStatus: domain.StatusPending,

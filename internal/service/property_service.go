@@ -15,7 +15,7 @@ type PropertyService interface {
 	SearchProperties(ctx context.Context, filter domain.PropertyFilter) ([]domain.Property, error)
 	GetPropertyDetail(ctx context.Context, id uuid.UUID) (*domain.Property, []domain.UnitCategory, error)
 	GetUnitContact(ctx context.Context, categoryID uuid.UUID) (*domain.ContactInfoResponse, error)
-	ReportProperty(ctx context.Context, tenantUserID, propertyID uuid.UUID, reason string) error
+	ReportProperty(ctx context.Context, tenantUserID, propertyID uuid.UUID, reason, details string) error
 }
 
 type propertyService struct {
@@ -103,7 +103,7 @@ func (s *propertyService) GetUnitContact(ctx context.Context, categoryID uuid.UU
 }
 
 // Business Rule 6: Tenant property reporting
-func (s *propertyService) ReportProperty(ctx context.Context, tenantUserID, propertyID uuid.UUID, reason string) error {
+func (s *propertyService) ReportProperty(ctx context.Context, tenantUserID, propertyID uuid.UUID, reason, details string) error {
 	if reason == "" {
 		return domain.ErrInvalidInput
 	}
@@ -122,6 +122,7 @@ func (s *propertyService) ReportProperty(ctx context.Context, tenantUserID, prop
 		PropertyID: propertyID,
 		ReportedBy: tenantProfile.ID,
 		Reason:     reason,
+		Details:    details,
 		Resolved:   false,
 		CreatedAt:  time.Now(),
 	}
